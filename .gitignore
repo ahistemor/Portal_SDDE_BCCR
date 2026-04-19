@@ -1,0 +1,16 @@
+# Entornos virtuales
+venv/
+.env
+
+# Archivos compilados en Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Archivos de caché y depuración generados localmente
+debug_raw_api.json
+*.log
+
+# Entornos IDE
+.vscode/
+.idea/
