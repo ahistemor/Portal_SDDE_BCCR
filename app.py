@@ -8,7 +8,7 @@ from api_client import (
     descargar_indicadores, metadata_indicador, series_indicador,
     BCCRAPIError
 )
-from utils import format_json_to_dataframe, convert_df_to_excel
+from utils import format_json_to_dataframe, convert_df_to_excel, generate_statistical_summary
 
 # Cargar variables de entorno
 load_dotenv()
@@ -37,6 +37,15 @@ selected_endpoint_key = st.sidebar.selectbox(
     options=list(ENDPOINTS.keys()), 
     format_func=lambda x: ENDPOINTS[x]
 )
+
+# Limpiar resultados en pantalla si se cambia de endpoint
+if "prev_endpoint" not in st.session_state:
+    st.session_state.prev_endpoint = selected_endpoint_key
+elif st.session_state.prev_endpoint != selected_endpoint_key:
+    for k in ["df_resultado", "excel_data", "file_content", "is_file", "selected_endpoint_key"]:
+        if k in st.session_state:
+            del st.session_state[k]
+    st.session_state.prev_endpoint = selected_endpoint_key
 
 # Idioma (siempre requerido, excepto si no es de API)
 idioma = st.sidebar.radio("Idioma", options=["ES", "EN"], index=0)
@@ -183,31 +192,24 @@ if "selected_endpoint_key" in st.session_state:
          if df is not None and not df.empty:
              st.write(f"### Resultados ({ENDPOINTS[endpoint_key]})")
              
-             # 1. Movidos los botones justo debajo del título
-             col_btn1, col_btn2 = st.columns(2)
-             with col_btn1:
-                 st.download_button(
-                     label="Exportar a Excel",
-                     data=st.session_state.excel_data,
-                     file_name=f"resultados_{endpoint_key}.xlsx",
-                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                 )
-             with col_btn2:
-                 if "series" in endpoint_key:
-                     label_boton = "Ocultar Gráfico" if st.session_state.get("mostrar_grafico", False) else "Generar Gráfico"
-                     if st.button(label_boton, type="secondary"):
-                         st.session_state.mostrar_grafico = not st.session_state.get("mostrar_grafico", False)
-                         st.rerun()
-                 else:
-                     st.info("La función gráfica está optimizada para Series.")
+             # 1. Botón único de Exportación a Excel
+             st.download_button(
+                 label="Exportar a Excel",
+                 data=st.session_state.excel_data,
+                 file_name=f"resultados_{endpoint_key}.xlsx",
+                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+             )
 
              st.write("---")
 
-             # 2 y 3. Sistema tipo acordeón (Tabs) si se acciona el gráfico
-             if st.session_state.get("mostrar_grafico"):
-                 # Tab 1 es Gráfico (aparecerá primero), Tab 2 es la Tabla
-                 tab_grafico, tab_datos = st.tabs(["📊 Gráfico Interactivo", "🗂️ Datos en Tabla"])
+             # 2. Despliegue de datos
+             if "series" in endpoint_key:
+                 # Si son series temporales, mostrar las 3 pestañas automáticamente
+                 tab_datos, tab_grafico, tab_ia = st.tabs(["🗂️ Datos en Tabla", "📊 Gráfico Interactivo", "🤖 Análisis Económico (IA)"])
                  
+                 with tab_datos:
+                     st.dataframe(df, use_container_width=True)
+                     
                  with tab_grafico:
                      st.write("### Opciones de Gráfico")
                      
@@ -260,11 +262,49 @@ if "selected_endpoint_key" in st.session_state:
                          
                      fig.update_layout(xaxis_title=eje_x, yaxis_title=eje_y)
                      st.plotly_chart(fig, use_container_width=True)
+                     
+                 with tab_ia:
+                     st.write("### 🧠 Informe Analítico Generado por Inteligencia Artificial")
+                     st.write("La IA procesará un resumen matemático de tus datos para brindarte una explicación económica cualitativa.")
+                     
+                     openai_api_key = os.getenv("OPENAI_API_KEY")
+                     if not openai_api_key:
+                         st.error("⚠️ No se encontró la llave `OPENAI_API_KEY` en el archivo `.env`. Por favor, añádela para usar esta función.")
+                     else:
+                         if st.button("✨ Generar / Regenerar Informe Económico"):
+                             resumen_stats = generate_statistical_summary(df)
+                             
+                             prompt = f"""Eres un experto economista analizando datos oficiales del Sistema de Divulgación de Datos Económicos del Banco Central de Costa Rica.
+Aquí tienes un resumen estadístico de la variable consultada:
 
-                 with tab_datos:
-                     st.dataframe(df, use_container_width=True)
+{resumen_stats}
+
+Por favor, escribe un informe profesional (máximo 3 párrafos) explicando qué significa este comportamiento numérico, cuáles podrían ser sus causas macroeconómicas contextuales y qué impacto o lectura general tendría esto para la economía. Usa un tono formal, técnico pero accesible, y directo al punto."""
+                             
+                             def stream_generator(stream_obj):
+                                 for chunk in stream_obj:
+                                     if chunk.choices[0].delta.content is not None:
+                                         yield chunk.choices[0].delta.content
+
+                             try:
+                                 from openai import OpenAI
+                                 client = OpenAI(api_key=openai_api_key)
+                                 
+                                 stream = client.chat.completions.create(
+                                     model="gpt-4o-mini",
+                                     messages=[
+                                         {"role": "system", "content": "Eres un economista senior analizando datos del BCCR."},
+                                         {"role": "user", "content": prompt}
+                                     ],
+                                     stream=True,
+                                 )
+                                 
+                                 st.write("---")
+                                 st.write_stream(stream_generator(stream))
+                             except Exception as e:
+                                 st.error(f"Ocurrió un error al contactar la API de OpenAI: {e}")
              else:
-                 # Si el panel gráfico no está activo, simplemente mostramos la tabla normal
+                 # Si no son series (es decir, metadatos), solo mostrar tabla simple
                  st.dataframe(df, use_container_width=True)
          else:
              st.info("La API no devolvió datos estructurados para procesar.")

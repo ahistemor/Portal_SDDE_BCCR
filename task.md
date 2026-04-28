@@ -1,0 +1,7 @@
+- [x] Update `requirements.txt` to add the `openai` library.
+- [x] Add `OPENAI_API_KEY=` to `.env.example`.
+- [x] Add `generate_statistical_summary(df)` to `utils.py` to condense data and avoid hitting LLM token limits.
+- [x] Update `app.py` UI layout:
+  - Add the "🤖 Analizar con IA" button.
+  - Expand the tabs to include "🤖 Análisis Económico (IA)".
+- [x] Implement the OpenAI call via streaming in `app.py` to write the report dynamically.
