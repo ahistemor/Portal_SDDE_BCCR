@@ -25,10 +25,12 @@ Aplicación web desarrollada con **Streamlit** para consultar el Sistema de Divu
 ## Configuración
 
 1. Cree un archivo llamado `.env` en la misma ubicación del archivo `app.py`.
-2. Pegue el contenido base suministrado en el archivo `.env.example` en su nuevo archivo `.env` y reemplace con su Token real (sin encomillar):
+2. Pegue el contenido base suministrado en el archivo `.env.example` en su nuevo archivo `.env` y reemplace las credenciales por las reales (sin encomillar):
    ```
    BCCR_TOKEN=SuTokenSecretoParaAccederALaAPIBCCR
+   OPENAI_API_KEY=sk-SuLlaveDeOpenAI
    ```
+   *Nota: La llave de OpenAI es necesaria para habilitar la pestaña de Análisis Económico (IA).*
 
 ## Ejecución
 
